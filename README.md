@@ -1,97 +1,51 @@
-# Microservice Boilerplate Generator
+# baksy – SaaS Backend Generator
 
-[![Stargazers](https://img.shields.io/github/stars/nishur31/micros?style=flat)](https://github.com/nishur31/micros/stargazers)
-[![Made With Javascript](https://img.shields.io/badge/Made%20with%20JavaScript-yellow?style=flat&color=black&logo=javascript)](https://www.javascript.com)
-[![Issues](https://img.shields.io/github/issues/nishur31/micros?style=flat)](https://github.com/nishur31/micros/issues)
-[![Forks](https://img.shields.io/github/forks/nishur31/micros?style=flat)](https://github.com/nishur31/micros/network/members)
-[![Size](https://img.shields.io/github/repo-size/nishur31/micros?style=flat)](https://github.com/nishur31/micros)
+[![Stargazers](https://img.shields.io/github/stars/nishant0320/baksy?style=flat)](https://github.com/nishant0320/baksy/stargazers)
+[![Issues](https://img.shields.io/github/issues/nishant0320/baksy?style=flat)](https://github.com/nishant0320/baksy/issues)
+[![Forks](https://img.shields.io/github/forks/nishant0320/baksy?style=flat)](https://github.com/nishant0320/baksy/network/members)
+[![Size](https://img.shields.io/github/repo-size/nishant0320/baksy?style=flat)](https://github.com/nishant0320/baksy)
 
+## About
 
-
-## Overview
-
-This project is a robust, modular microservice server boilerplate generator for Node.js. It supports dynamic runtime installation, interactive prompts, ESM compatibility, and generates a complete microservice project structure with best practices.
+**baksy** is an opinionated backend generator for SaaS builders. It helps you scaffold a modern Node.js backend with best practices, interactive setup, and support for popular stacks (TypeScript/JavaScript, MongoDB/PostgreSQL, JWT/OAuth, and more).
 
 ## Features
 
-- Modular codebase with centralized utilities
-- Dynamic runtime module installation (installs only valid npm packages)
-- Interactive package.json creation and updating
-- Prettier and .gitignore generator
-- Custom logging and error handling
-- ESM (ECMAScript Module) support
-- Multi-database and Redis caching support
-- Automatic folder and file structure generation
-- Shields.io badges for repo status, stargazers, issues, forks, size, and license
+- Interactive CLI: Choose language, database, auth, payments, queue, Docker, and more
+- Modern project structure with ESM support
+- Pre-configured for TypeScript or JavaScript
+- Supports MongoDB (Mongoose) and PostgreSQL (Prisma)
+- Auth options: JWT, OAuth, refresh tokens, cookies
+- Payments: Stripe, Razorpay, or none
+- Queue: BullMQ (Redis), RabbitMQ, or none
+- Docker support (optional)
+- Extensible and modular codebase
 
-## Usage
+## How It Works
 
-1. Clone the repository:
+1. Run the CLI to scaffold a backend:
+
    ```bash
-   git clone https://github.com/nishur31/micros.git
-   cd micros
+   npx baksy add <project-directory>
    ```
-2. Run the generator:
+
+   or
+
    ```bash
-   node index.js
+   npx baksy -h
    ```
-3. Follow the interactive prompts to configure your microservices, databases, and caching.
 
-## Project Structure
+2. Use the arrow keys to select options for language, database, auth, etc.
+3. Your backend project will be generated in the specified directory.
 
-- `index.js`: Main generator CLI
-- `package.js`: Handles package.json creation
-- `importModule.js`: Dynamic module installer
-- `destroy.js`: Cleans up the workplace
-- `codeBase.js`: Centralized code templates
-- `prettier.js`: Prettier config generator
-- `gitignore.js`: .gitignore generator
-- `handler.js`: Error handling wrapper
-- `log.js`: Custom logging
+## Example
 
-## Extra
-
-- Supports custom service names and gateway service by default
-- Cleans up temp directories completion of generation
-- No emojis used in README or logs
-
-## Common Modules Used
-
-**Dependencies:**
-
-- winston
-- jsonwebtoken
-- bcrypt
-- qrcode
-- status-map
-- cors
-- express
-- dotenv
-- envf
-- prisma
-- @prisma/client
-- ioredis
-
-**DevDependencies:**
-
-- morgan
-- nodemon
-- prettier
-
-## Future
-
-- Will add support prompt for typescript or javascript
-
-## Contributing
-
-Contributions are welcome! Please open issues or pull requests for suggestions, bug reports, or improvements.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+```bash
+npx baksy my-saas-backend -p ./
+```
 
 ## Links
 
-- [GitHub Repository](https://github.com/nishur31/micros)
-- [Stargazers](https://github.com/nishur31/micros/stargazers)
-- [Issues](https://github.com/nishur31/micros/issues)
+- [GitHub Repository](https://github.com/nishant0320/baksy)
+- [Stargazers](https://github.com/nishant0320/baksy/stargazers)
+- [Issues](https://github.com/nishant0320/baksy/issues)
