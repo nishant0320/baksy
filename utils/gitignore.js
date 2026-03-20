@@ -1,5 +1,5 @@
-import fs from "node:fs";
 import path from "node:path";
+import { validateDir, writeFileIfNeeded } from "./file-utils.js";
 
 const TEMPLATES = {
   node: `# Node
@@ -39,20 +39,16 @@ export default function gitignore({
 } = {}) {
   const gitignorePath = path.join(targetDir, ".gitignore");
 
-  if (!fs.existsSync(targetDir)) {
-    throw new Error(`Target directory does not exist: ${targetDir}`);
-  }
-
-  if (fs.existsSync(gitignorePath) && !force) {
-    console.log(".gitignore already exists.");
-    return false;
-  }
+  validateDir(targetDir);
 
   if (!TEMPLATES[template]) {
     throw new Error(`Unsupported gitignore template: ${template}`);
   }
 
-  fs.writeFileSync(gitignorePath, TEMPLATES[template], "utf8");
+  if (!writeFileIfNeeded(gitignorePath, TEMPLATES[template], force)) {
+    console.log(".gitignore already exists.");
+    return false;
+  }
 
   console.log(`.gitignore generated (${template})`);
   return true;

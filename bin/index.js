@@ -4,7 +4,9 @@ import chalk from "chalk";
 import ora from "ora";
 import fs from "node:fs";
 import path from "node:path";
-import { select, confirm } from "@inquirer/prompts";
+import { select, confirm, checkbox } from "@inquirer/prompts";
+import { prettyJson } from "../utils/file-utils.js";
+import scaffold from "../utils/scaffold.js";
 
 const program = new Command();
 
@@ -96,10 +98,40 @@ program
     });
 
     const queue = await select({
-      message: "Background jobs:",
+      message: "Background jobs / Mail queue:",
       choices: [
         { name: "None", value: "none" },
-        { name: "BullMQ", value: "bullmq" },
+        { name: "BullMQ (Redis)", value: "bullmq" },
+      ],
+      default: "none",
+    });
+
+    const archStyle = await select({
+      message: "Architecture style:",
+      choices: [
+        { name: "Monolith  (modules/ layout, single app)", value: "monolith" },
+        { name: "Microservice  (controllers/ services/ repos/ routes/)", value: "microservice" },
+      ],
+      default: "monolith",
+    });
+
+    const authMethods = await checkbox({
+      message: "Auth methods  (space = toggle, enter = confirm):",
+      choices: [
+        { name: "Email + Password", value: "email", checked: true },
+        { name: "TOTP 2FA  (speakeasy + QR code)", value: "totp" },
+        { name: "Passwordless magic-link  (nodemailer)", value: "passless" },
+        { name: "OAuth — Google", value: "oauth-google" },
+        { name: "OAuth — GitHub", value: "oauth-github" },
+      ],
+    });
+
+    const payments = await select({
+      message: "Payments:",
+      choices: [
+        { name: "None", value: "none" },
+        { name: "Stripe", value: "stripe" },
+        { name: "Razorpay", value: "razorpay" },
       ],
       default: "none",
     });
@@ -116,15 +148,25 @@ program
       database,
       cache,
       queue,
+      archStyle,
+      authMethods,
+      payments,
       docker,
     };
 
-    fs.writeFileSync(
-      path.join(targetDir, "features.json"),
-      JSON.stringify(features, null, 2),
-    );
+    try {
+      scaffold(targetDir, features);
 
-    spinner.succeed("Project generated successfully.");
+      fs.writeFileSync(
+        path.join(targetDir, "baksy.json"),
+        prettyJson(features),
+      );
+
+      spinner.succeed("Project generated successfully.");
+    } catch (err) {
+      spinner.fail("Generation failed: " + err.message);
+      process.exit(1);
+    }
 
     console.log(chalk.green("\nNext steps:\n"));
 
@@ -132,9 +174,17 @@ program
       console.log(`  cd ${path.relative(process.cwd(), targetDir)}`);
     }
 
-    console.log(`  npm install
-  npm run dev
-`);
+    console.log(`  npm install`);
+
+    if (language === "ts") {
+      console.log(`  cp .env.example .env`);
+      console.log(`  npm run dev`);
+    } else {
+      console.log(`  cp .env.example .env`);
+      console.log(`  npm run dev`);
+    }
+
+    console.log("");
   });
 
 program.parse(process.argv);

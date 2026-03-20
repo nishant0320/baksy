@@ -1,13 +1,17 @@
 import path from "node:path";
 import fs from "node:fs";
+import { validateDir, prettyJson } from "./file-utils.js";
 
 export default function generatePackageJson(
-  targetDir=process.cwd(),
-  { isTS = true, force = false } = {},
+  targetDir = process.cwd(),
+  {
+    isTS = true,
+    force = false,
+    dependencies = {},
+    devDependencies = {},
+  } = {},
 ) {
-  if (!fs.existsSync(targetDir)) {
-    throw new Error(`Target directory does not exist: ${targetDir}`);
-  }
+  validateDir(targetDir);
 
   const pkgPath = path.join(targetDir, "package.json");
 
@@ -33,11 +37,11 @@ export default function generatePackageJson(
           dev: "nodemon src/index.js",
           start: "node src/index.js",
         },
-    dependencies: {},
-    devDependencies: {},
+    dependencies: { ...dependencies },
+    devDependencies: { ...devDependencies },
   };
 
-  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2));
+  fs.writeFileSync(pkgPath, prettyJson(pkg));
 
   return pkg;
 }
