@@ -1,5 +1,5 @@
-import fs from "node:fs";
 import path from "node:path";
+import { validateDir, writeFileIfNeeded, prettyJson } from "./file-utils.js";
 
 const PRETTIER_RC = {
   semi: true,
@@ -52,23 +52,13 @@ pnpm-lock.yaml
 .vscode
 `;
 
-function writeFileIfNeeded(filePath, content, force) {
-  if (!fs.existsSync(filePath) || force) {
-    fs.writeFileSync(filePath, content);
-    return true;
-  }
-  return false;
-}
-
 export default function prettier({
   rc = true,
   ignore = true,
   force = false,
   dir = process.cwd(),
 } = {}) {
-  if (!fs.existsSync(dir)) {
-    throw new Error(`Directory does not exist: ${dir}`);
-  }
+  validateDir(dir);
 
   const results = {
     rc: false,
@@ -79,7 +69,7 @@ export default function prettier({
     const rcPath = path.join(dir, ".prettierrc");
     results.rc = writeFileIfNeeded(
       rcPath,
-      JSON.stringify(PRETTIER_RC, null, 2),
+      prettyJson(PRETTIER_RC),
       force,
     );
   }

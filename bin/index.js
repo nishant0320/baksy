@@ -5,6 +5,7 @@ import ora from "ora";
 import fs from "node:fs";
 import path from "node:path";
 import { select, confirm } from "@inquirer/prompts";
+import { prettyJson } from "../utils/file-utils.js";
 
 const program = new Command();
 
@@ -121,7 +122,7 @@ program
 
     fs.writeFileSync(
       path.join(targetDir, "features.json"),
-      JSON.stringify(features, null, 2),
+      prettyJson(features),
     );
 
     spinner.succeed("Project generated successfully.");
