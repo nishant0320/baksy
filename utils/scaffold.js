@@ -4,6 +4,17 @@ import generatePackageJson from "./package.js";
 import gitignore from "./gitignore.js";
 import prettier from "./prettier.js";
 import { utils, server, mail } from "../templates/codeBase.js";
+import {
+  generateUserModel,
+  generatePrismaSchema,
+  generateAuthRepository,
+  generateAuthService,
+  generateAuthController,
+  generateAuthRoutes,
+  generateAuthMiddleware,
+  generatePassportConfig,
+  generateAppWithAuth,
+} from "../templates/auth.js";
 import { prettyJson } from "./file-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -21,8 +32,16 @@ function writeFile(targetDir, relPath, content) {
 // ---------------------------------------------------------------------------
 
 function buildDependencies(features) {
-  const { language, database, cache, queue, auth, payments } = features;
+  const { language, database, cache, queue, authMethods = [], payments } = features;
   const isTS = language === "ts";
+
+  const hasEmail    = authMethods.includes("email");
+  const hasTotp     = authMethods.includes("totp");
+  const hasPassless = authMethods.includes("passless");
+  const hasGoogle   = authMethods.includes("oauth-google");
+  const hasGithub   = authMethods.includes("oauth-github");
+  const hasOAuth    = hasGoogle || hasGithub;
+  const hasAnyAuth  = authMethods.length > 0;
 
   const deps = {
     express: "^4.21.2",
@@ -60,10 +79,42 @@ function buildDependencies(features) {
     deps.nodemailer = "^6.9.16";
     if (isTS) devDeps["@types/nodemailer"] = "^6.4.17";
   }
-  if (auth === "jwt") {
+
+  // Auth deps
+  if (hasAnyAuth) {
     deps.jsonwebtoken = "^9.0.2";
     if (isTS) devDeps["@types/jsonwebtoken"] = "^9.0.7";
   }
+  if (hasEmail || hasOAuth) {
+    deps.bcryptjs = "^2.4.3";
+    if (isTS) devDeps["@types/bcryptjs"] = "^2.4.6";
+  }
+  if (hasTotp) {
+    deps.speakeasy = "^2.0.0";
+    deps.qrcode = "^1.5.4";
+    if (isTS) {
+      devDeps["@types/speakeasy"] = "^2.0.10";
+      devDeps["@types/qrcode"] = "^1.5.5";
+    }
+  }
+  if (hasPassless && queue !== "bullmq") {
+    // Nodemailer for magic-link sending (only add if not already added via queue)
+    deps.nodemailer = "^6.9.16";
+    if (isTS) devDeps["@types/nodemailer"] = "^6.4.17";
+  }
+  if (hasOAuth) {
+    deps.passport = "^0.7.0";
+    if (isTS) devDeps["@types/passport"] = "^1.0.17";
+  }
+  if (hasGoogle) {
+    deps["passport-google-oauth20"] = "^2.0.0";
+    if (isTS) devDeps["@types/passport-google-oauth20"] = "^2.0.16";
+  }
+  if (hasGithub) {
+    deps["passport-github2"] = "^0.1.12";
+    if (isTS) devDeps["@types/passport-github2"] = "^1.2.9";
+  }
+
   if (payments === "stripe") {
     deps.stripe = "^17.7.0";
   }
@@ -199,7 +250,11 @@ function generateTsConfig() {
 }
 
 function generateEnvExample(features) {
-  const { database, cache, queue, auth, payments } = features;
+  const { database, cache, queue, authMethods = [], payments } = features;
+  const hasAnyAuth  = authMethods.length > 0;
+  const hasPassless = authMethods.includes("passless");
+  const hasGoogle   = authMethods.includes("oauth-google");
+  const hasGithub   = authMethods.includes("oauth-github");
   const lines = ["PORT=4000", "MODE=development", ""];
 
   if (database === "mongo") {
@@ -211,19 +266,35 @@ function generateEnvExample(features) {
   if (cache === "redis" || queue === "bullmq") {
     lines.push("REDIS_HOST=localhost", "REDIS_PORT=6379", "");
   }
-  if (auth === "jwt") {
+  if (hasAnyAuth) {
     lines.push(
       "ACCESS_KEY=your_access_secret_here",
       "REFRESH_KEY=your_refresh_secret_here",
       "",
     );
   }
-  if (queue === "bullmq") {
+  if (queue === "bullmq" || hasPassless) {
     lines.push(
       "MAIL_HOST=smtp.gmail.com",
       "MAIL_PORT=587",
       "MAIL_FROM=your@email.com",
       "MAIL_PASS=your_app_password",
+      "",
+    );
+  }
+  if (hasGoogle) {
+    lines.push(
+      "GOOGLE_CLIENT_ID=your_google_client_id",
+      "GOOGLE_CLIENT_SECRET=your_google_client_secret",
+      "GOOGLE_CALLBACK_URL=http://localhost:4000/api/auth/google/callback",
+      "",
+    );
+  }
+  if (hasGithub) {
+    lines.push(
+      "GITHUB_CLIENT_ID=your_github_client_id",
+      "GITHUB_CLIENT_SECRET=your_github_client_secret",
+      "GITHUB_CALLBACK_URL=http://localhost:4000/api/auth/github/callback",
       "",
     );
   }
@@ -338,7 +409,7 @@ services:
 // ---------------------------------------------------------------------------
 
 function generateReadme(projectName, features) {
-  const { language, database, cache, queue, auth, payments, docker } = features;
+  const { language, database, cache, queue, authMethods = [], archStyle, payments, docker } = features;
   const isTS = language === "ts";
   const ext = isTS ? "ts" : "js";
 
@@ -357,11 +428,25 @@ function generateReadme(projectName, features) {
     `- **Language:** ${isTS ? "TypeScript" : "JavaScript"}`,
     `- **Framework:** Express.js`,
     `- **Database:** ${dbLabel}`,
+    `- **Architecture:** ${archStyle === "microservice" ? "Microservice-oriented" : "Monolith"}`,
   ];
 
   if (cache === "redis") lines.push("- **Cache:** Redis (ioredis)");
   if (queue === "bullmq") lines.push("- **Queue / Mail:** BullMQ + Nodemailer");
-  if (auth === "jwt") lines.push("- **Auth:** JWT (jsonwebtoken)");
+
+  if (authMethods.length > 0) {
+    const methodLabels = {
+      email: "Email + Password",
+      totp: "TOTP 2FA (speakeasy)",
+      passless: "Passwordless magic-link",
+      "oauth-google": "Google OAuth",
+      "oauth-github": "GitHub OAuth",
+    };
+    lines.push(
+      "- **Auth:** " + authMethods.map((m) => methodLabels[m] || m).join(", "),
+    );
+  }
+
   if (payments === "stripe") lines.push("- **Payments:** Stripe");
   if (payments === "razorpay") lines.push("- **Payments:** Razorpay");
   if (docker) lines.push("- **Docker:** Dockerfile + docker-compose");
@@ -373,66 +458,96 @@ function generateReadme(projectName, features) {
     "```bash",
     "npm install",
     "cp .env.example .env  # fill in your values",
+    database === "postgres" ? "npx prisma generate  # generate Prisma client" : "",
     "npm run dev",
     "```",
     "",
-    "## Scripts",
-    "",
   );
 
-  if (isTS) {
+  if (authMethods.length > 0) {
     lines.push(
-      "| Script | Description |",
-      "|--------|-------------|",
-      "| `npm run dev` | Start dev server with hot reload (ts-node-dev) |",
-      "| `npm run build` | Compile TypeScript to `dist/` |",
-      "| `npm start` | Run compiled output |",
+      "## Auth API",
+      "",
+      "| Method | Endpoint | Description |",
+      "|--------|----------|-------------|",
     );
-  } else {
+    if (authMethods.includes("email")) {
+      lines.push(
+        "| POST | `/api/auth/register` | Register new user |",
+        "| POST | `/api/auth/login` | Login (returns JWT) |",
+      );
+    }
     lines.push(
-      "| Script | Description |",
-      "|--------|-------------|",
-      "| `npm run dev` | Start dev server with nodemon |",
-      "| `npm start` | Start production server |",
+      "| POST | `/api/auth/logout` | Logout (revoke refresh token) |",
+      "| POST | `/api/auth/refresh` | Get new access token |",
+      "| GET  | `/api/auth/me` | Get current user |",
     );
+    if (authMethods.includes("totp")) {
+      lines.push(
+        "| POST | `/api/auth/2fa/setup` | Generate TOTP secret + QR code |",
+        "| POST | `/api/auth/2fa/enable` | Confirm and enable 2FA |",
+        "| POST | `/api/auth/2fa/login` | Complete login with TOTP token |",
+        "| POST | `/api/auth/2fa/disable` | Disable 2FA |",
+      );
+    }
+    if (authMethods.includes("passless")) {
+      lines.push(
+        "| POST | `/api/auth/passless/request` | Send magic-link email |",
+        "| GET  | `/api/auth/passless/verify?token=` | Verify magic-link |",
+      );
+    }
+    if (authMethods.includes("oauth-google")) {
+      lines.push(
+        "| GET | `/api/auth/google` | Redirect to Google OAuth |",
+        "| GET | `/api/auth/google/callback` | Google OAuth callback |",
+      );
+    }
+    if (authMethods.includes("oauth-github")) {
+      lines.push(
+        "| GET | `/api/auth/github` | Redirect to GitHub OAuth |",
+        "| GET | `/api/auth/github/callback` | GitHub OAuth callback |",
+      );
+    }
+    lines.push("");
   }
 
   lines.push(
+    "## Scripts",
     "",
-    "## Project Structure",
+    isTS
+      ? "| Script | Description |\n|--------|-------------|\n| `npm run dev` | Start dev server with hot reload (ts-node-dev) |\n| `npm run build` | Compile TypeScript to `dist/` |\n| `npm start` | Run compiled output |"
+      : "| Script | Description |\n|--------|-------------|\n| `npm run dev` | Start dev server with nodemon |\n| `npm start` | Start production server |",
     "",
-    "```",
-    "src/",
-    `├── index.${ext}         # Entry point`,
-    "├── config/",
-    `│   ├── app.${ext}       # Express app setup`,
-    `│   ├── env.${ext}       # dotenv loader`,
   );
 
-  if (database !== "custom") lines.push(`│   ├── db.${ext}        # Database connection`);
-  if (cache === "redis" || queue === "bullmq") lines.push(`│   └── redis.${ext}     # Redis connection`);
+  lines.push("## Project Structure", "", "```");
 
-  lines.push("└── utils/");
-  lines.push(`    ├── handler.${ext}   # Async error wrapper`);
-  lines.push(`    ├── time.${ext}      # Time unit converter`);
-  lines.push(`    └── logger.${ext}    # Winston logger`);
-  if (auth === "jwt") lines.push(`    ├── jwt.${ext}       # JWT helpers`);
-  if (cache === "redis") lines.push(`    └── redisKeyGen.${ext}`);
-  if (payments !== "none") lines.push(`    └── payments.${ext}  # Payment client`);
-
-  if (queue === "bullmq") {
+  if (archStyle === "microservice") {
     lines.push(
-      "mail/",
-      `├── mailTemplates.${ext}`,
-      `├── mailer.${ext}`,
-      `├── queue.${ext}`,
-      `├── worker.${ext}`,
-      `└── mailRepository.${ext}`,
+      "src/",
+      `├── index.${ext}`,
+      "├── config/          # env, db, redis, passport",
+      "├── controllers/     # auth.controller",
+      "├── services/        # auth.service",
+      "├── repositories/    # auth.repository",
+      "├── models/          # user.model (Mongoose)",
+      "├── routes/          # auth.routes",
+      "├── middlewares/     # auth.middleware (JWT guard)",
+      "└── utils/           # handler, time, logger, jwt, ...",
+    );
+  } else {
+    lines.push(
+      "src/",
+      `├── index.${ext}`,
+      "├── config/          # env, db, redis, passport",
+      "├── modules/",
+      "│   └── auth/        # controller, service, repository, routes, model",
+      "├── middlewares/     # auth.middleware (JWT guard)",
+      "└── utils/           # handler, time, logger, ...",
     );
   }
 
   lines.push("```", "");
-
   return lines.join("\n");
 }
 
@@ -441,9 +556,11 @@ function generateReadme(projectName, features) {
 // ---------------------------------------------------------------------------
 
 export default function scaffold(targetDir, features) {
-  const { language, database, cache, queue, auth, payments, docker } = features;
+  const { language, database, cache, queue, authMethods = [], archStyle = "monolith", payments, docker } = features;
   const isTS = language === "ts";
   const ext = isTS ? "ts" : "js";
+  const hasAnyAuth = authMethods.length > 0;
+  const hasOAuth   = authMethods.includes("oauth-google") || authMethods.includes("oauth-github");
 
   // 1. Config files at project root
   const { deps, devDeps } = buildDependencies(features);
@@ -462,7 +579,11 @@ export default function scaffold(targetDir, features) {
   writeFile(targetDir, `src/index.${ext}`, entryContent);
 
   // 3. src/config
-  writeFile(targetDir, `src/config/app.${ext}`, server.basicExpress);
+  // app.js — if auth is included use the version that mounts auth routes
+  const appContent = hasAnyAuth
+    ? generateAppWithAuth({ authMethods, archStyle })
+    : server.basicExpress;
+  writeFile(targetDir, `src/config/app.${ext}`, appContent);
   writeFile(targetDir, `src/config/env.${ext}`, generateEnvJs());
 
   const dbContent = generateDbConfig(database);
@@ -474,6 +595,11 @@ export default function scaffold(targetDir, features) {
     writeFile(targetDir, `src/config/redis.${ext}`, generateRedisConfig());
   }
 
+  // Passport config (OAuth only)
+  if (hasOAuth) {
+    writeFile(targetDir, `src/config/passport.${ext}`, generatePassportConfig({ authMethods, archStyle }));
+  }
+
   // 4. src/utils
   writeFile(targetDir, `src/utils/handler.${ext}`, utils.handler);
   writeFile(targetDir, `src/utils/time.${ext}`, utils.time);
@@ -482,16 +608,66 @@ export default function scaffold(targetDir, features) {
   if (cache === "redis") {
     writeFile(targetDir, `src/utils/redisKeyGen.${ext}`, utils.redisKeyGen);
   }
-  if (auth === "jwt") {
-    writeFile(targetDir, `src/utils/jwt.${ext}`, utils.jwt);
-  }
 
   const paymentContent = generatePaymentUtil(payments);
   if (paymentContent) {
     writeFile(targetDir, `src/utils/payments.${ext}`, paymentContent);
   }
 
-  // 5. src/mail (BullMQ queue)
+  // Prisma schema (database layer — always generate when postgres, regardless of auth)
+  if (database === "postgres") {
+    writeFile(targetDir, "prisma/schema.prisma", generatePrismaSchema({ authMethods }));
+  }
+
+  // 5. Auth module
+  if (hasAnyAuth) {
+    const authFeatures = { database, authMethods, archStyle, queue };
+
+    // Paths depend on architecture style
+    const isMonolith = archStyle === "monolith";
+
+    // Model / schema
+    if (database === "mongo") {
+      const modelPath = isMonolith
+        ? `src/modules/auth/user.model.${ext}`
+        : `src/models/user.model.${ext}`;
+      writeFile(targetDir, modelPath, generateUserModel({ authMethods }));
+    }
+    // (prisma/schema.prisma already written above)
+
+    // Repository
+    const repoPath = isMonolith
+      ? `src/modules/auth/auth.repository.${ext}`
+      : `src/repositories/auth.repository.${ext}`;
+    writeFile(targetDir, repoPath, generateAuthRepository(authFeatures));
+
+    // Service
+    const svcPath = isMonolith
+      ? `src/modules/auth/auth.service.${ext}`
+      : `src/services/auth.service.${ext}`;
+    writeFile(targetDir, svcPath, generateAuthService(authFeatures));
+
+    // Controller
+    const ctrlPath = isMonolith
+      ? `src/modules/auth/auth.controller.${ext}`
+      : `src/controllers/auth.controller.${ext}`;
+    writeFile(targetDir, ctrlPath, generateAuthController({ authMethods, archStyle }));
+
+    // Routes
+    const routesPath = isMonolith
+      ? `src/modules/auth/auth.routes.${ext}`
+      : `src/routes/auth.routes.${ext}`;
+    writeFile(targetDir, routesPath, generateAuthRoutes({ authMethods, archStyle }));
+
+    // Middleware (shared location in both styles)
+    writeFile(
+      targetDir,
+      `src/middlewares/auth.middleware.${ext}`,
+      generateAuthMiddleware({ archStyle }),
+    );
+  }
+
+  // 6. src/mail (BullMQ queue)
   if (queue === "bullmq") {
     writeFile(targetDir, `src/mail/mailTemplates.${ext}`, mail.mailTemplates);
     writeFile(targetDir, `src/mail/mailer.${ext}`, mail.mailer);
@@ -500,22 +676,22 @@ export default function scaffold(targetDir, features) {
     writeFile(targetDir, `src/mail/mailRepository.${ext}`, mail.mailRepository);
   }
 
-  // 6. TypeScript config
+  // 7. TypeScript config
   if (isTS) {
     writeFile(targetDir, "tsconfig.json", generateTsConfig());
   }
 
-  // 7. Docker
+  // 8. Docker
   if (docker) {
     writeFile(targetDir, "Dockerfile", generateDockerfile());
     writeFile(targetDir, ".dockerignore", generateDockerIgnore());
     writeFile(targetDir, "docker-compose.yml", generateDockerCompose(features));
   }
 
-  // 8. Environment example
+  // 9. Environment example
   writeFile(targetDir, ".env.example", generateEnvExample(features));
 
-  // 9. README
+  // 10. README
   const projectName = path.basename(targetDir);
   writeFile(targetDir, "README.md", generateReadme(projectName, features));
 }

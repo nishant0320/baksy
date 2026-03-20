@@ -4,7 +4,7 @@ import chalk from "chalk";
 import ora from "ora";
 import fs from "node:fs";
 import path from "node:path";
-import { select, confirm } from "@inquirer/prompts";
+import { select, confirm, checkbox } from "@inquirer/prompts";
 import { prettyJson } from "../utils/file-utils.js";
 import scaffold from "../utils/scaffold.js";
 
@@ -106,13 +106,24 @@ program
       default: "none",
     });
 
-    const auth = await select({
-      message: "Authentication:",
+    const archStyle = await select({
+      message: "Architecture style:",
       choices: [
-        { name: "None", value: "none" },
-        { name: "JWT", value: "jwt" },
+        { name: "Monolith  (modules/ layout, single app)", value: "monolith" },
+        { name: "Microservice  (controllers/ services/ repos/ routes/)", value: "microservice" },
       ],
-      default: "jwt",
+      default: "monolith",
+    });
+
+    const authMethods = await checkbox({
+      message: "Auth methods  (space = toggle, enter = confirm):",
+      choices: [
+        { name: "Email + Password", value: "email", checked: true },
+        { name: "TOTP 2FA  (speakeasy + QR code)", value: "totp" },
+        { name: "Passwordless magic-link  (nodemailer)", value: "passless" },
+        { name: "OAuth — Google", value: "oauth-google" },
+        { name: "OAuth — GitHub", value: "oauth-github" },
+      ],
     });
 
     const payments = await select({
@@ -137,7 +148,8 @@ program
       database,
       cache,
       queue,
-      auth,
+      archStyle,
+      authMethods,
       payments,
       docker,
     };
