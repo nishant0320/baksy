@@ -6,6 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { select, confirm } from "@inquirer/prompts";
 import { prettyJson } from "../utils/file-utils.js";
+import scaffold from "../utils/scaffold.js";
 
 const program = new Command();
 
@@ -97,10 +98,29 @@ program
     });
 
     const queue = await select({
-      message: "Background jobs:",
+      message: "Background jobs / Mail queue:",
       choices: [
         { name: "None", value: "none" },
-        { name: "BullMQ", value: "bullmq" },
+        { name: "BullMQ (Redis)", value: "bullmq" },
+      ],
+      default: "none",
+    });
+
+    const auth = await select({
+      message: "Authentication:",
+      choices: [
+        { name: "None", value: "none" },
+        { name: "JWT", value: "jwt" },
+      ],
+      default: "jwt",
+    });
+
+    const payments = await select({
+      message: "Payments:",
+      choices: [
+        { name: "None", value: "none" },
+        { name: "Stripe", value: "stripe" },
+        { name: "Razorpay", value: "razorpay" },
       ],
       default: "none",
     });
@@ -117,15 +137,24 @@ program
       database,
       cache,
       queue,
+      auth,
+      payments,
       docker,
     };
 
-    fs.writeFileSync(
-      path.join(targetDir, "features.json"),
-      prettyJson(features),
-    );
+    try {
+      scaffold(targetDir, features);
 
-    spinner.succeed("Project generated successfully.");
+      fs.writeFileSync(
+        path.join(targetDir, "baksy.json"),
+        prettyJson(features),
+      );
+
+      spinner.succeed("Project generated successfully.");
+    } catch (err) {
+      spinner.fail("Generation failed: " + err.message);
+      process.exit(1);
+    }
 
     console.log(chalk.green("\nNext steps:\n"));
 
@@ -133,9 +162,17 @@ program
       console.log(`  cd ${path.relative(process.cwd(), targetDir)}`);
     }
 
-    console.log(`  npm install
-  npm run dev
-`);
+    console.log(`  npm install`);
+
+    if (language === "ts") {
+      console.log(`  cp .env.example .env`);
+      console.log(`  npm run dev`);
+    } else {
+      console.log(`  cp .env.example .env`);
+      console.log(`  npm run dev`);
+    }
+
+    console.log("");
   });
 
 program.parse(process.argv);

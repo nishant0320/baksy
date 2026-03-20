@@ -3,8 +3,13 @@ import fs from "node:fs";
 import { validateDir, prettyJson } from "./file-utils.js";
 
 export default function generatePackageJson(
-  targetDir=process.cwd(),
-  { isTS = true, force = false } = {},
+  targetDir = process.cwd(),
+  {
+    isTS = true,
+    force = false,
+    dependencies = {},
+    devDependencies = {},
+  } = {},
 ) {
   validateDir(targetDir);
 
@@ -32,8 +37,8 @@ export default function generatePackageJson(
           dev: "nodemon src/index.js",
           start: "node src/index.js",
         },
-    dependencies: {},
-    devDependencies: {},
+    dependencies: { ...dependencies },
+    devDependencies: { ...devDependencies },
   };
 
   fs.writeFileSync(pkgPath, prettyJson(pkg));
